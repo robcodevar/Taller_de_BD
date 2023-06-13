@@ -1,0 +1,23 @@
+CREATE TRIGGER CambiarEstadoInmueble
+ON TRANSACCION -- Reemplaza "Transacciones" con el nombre de tu tabla de transacciones
+AFTER INSERT, UPDATE -- El trigger se disparará después de insertar o actualizar filas en la tabla
+AS
+BEGIN
+    -- Verificar si la transacción es de venta, alquiler o anticrético
+    IF EXISTS (SELECT * FROM inserted WHERE TIPO_TRANSACCION IN ('Venta', 'Alquiler', 'Anticrético'))
+    BEGIN
+        -- Actualizar el estado del inmueble a "transacción culminada"
+        UPDATE INMUEBLE -- Reemplaza "Inmuebles" con el nombre de tu tabla de inmuebles
+        SET ESTADO = 'transacción culminada'
+        WHERE ID_INMUEBLE IN (SELECT ID_INMUEBLE FROM inserted) -- Ajusta la condición según tu estructura de tablas
+        AND Estado <> 'transacción culminada' -- Solo actualizar si el estado no es "transacción culminada"
+    END
+END
+
+DROP TRIGGER IF EXISTS CambiarEstadoInmueble;
+
+
+Select * from INMUEBLE
+
+INSERT INTO TRANSACCION(ID_ALQUILER,ID_TRANSACCION,ID_COMISION,ID_EMPLEADO,ID_PROPIETARIO,ID_CLIENTE,ID_INMUEBLE,FECHA_INICIO,FECHA_PAGO,CONDICIONES_PAGO,OBSERVACIONES_ALQUILER,FECHA_TRANSACCION,DESCRIPCION_TRANSACCION,TIPO_TRANSACCION,DETALLE_TRANSACCION)
+VALUES (50,50,50,50,50,50,50,'2022-07-15 00:00:00.000','2023-03-04 00:00:00.000','El inquilino paga una renta mensual ','no está obligado a dar al inquilino un tiempo de gracia',GETDATE(),'condiciones de entrega de la propiedad','Venta','términos de la venta, incluyendo el precio de venta')
