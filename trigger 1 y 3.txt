@@ -1,0 +1,81 @@
+--- TRIGGER 1 : 
+CREATE TRIGGER CalcularComisiones
+ON Transaccion
+AFTER INSERT
+AS
+BEGIN
+    -- Variables para almacenar los cálculos de comisiones
+    DECLARE @TipoTransaccion VARCHAR(50)
+    DECLARE @ComisionEmpresa DECIMAL(10, 2)
+    DECLARE @ComisionEmpleado DECIMAL(10, 2)
+    DECLARE @EmpleadoID INT
+
+    -- Obtener la información de la transacción insertada
+    SELECT @TipoTransaccion = Tipo_Transaccion,
+           @EmpleadoID = ID_Empleado
+    FROM inserted
+
+    -- Calcular comisiones según el tipo de transacción
+    IF @TipoTransaccion = 'Venta' OR @TipoTransaccion = 'Anticretico'
+    BEGIN
+        SET @ComisionEmpresa = 0.03
+        SET @ComisionEmpleado = 0.0006
+    END
+    ELSE IF @TipoTransaccion = 'Alquiler'
+    BEGIN
+        SET @ComisionEmpresa = 0.5
+        SET @ComisionEmpleado = 0.2
+    END
+
+    -- Obtener el ID del contrato relacionado con la transacción insertada
+    DECLARE @ContratoID INT
+    SELECT @ContratoID = ID_Contrato
+    FROM Transaccion
+    WHERE ID_Transaccion = (SELECT ID_Transaccion FROM inserted)
+
+    -- Insertar la comisión de la empresa en la tabla Comision
+    INSERT INTO Comision (ID_Alquiler, ID_Transaccion, Porcentaje_Comision)
+    VALUES (@ContratoID, (SELECT ID_Transaccion FROM inserted), @ComisionEmpresa)
+
+    -- Obtener el ID de la comisión recién insertada
+    DECLARE @ComisionID INT
+    SET @ComisionID = SCOPE_IDENTITY()
+
+    -- Insertar la comisión del empleado en la tabla Comision_Empleado
+    INSERT INTO Comision_Empleado (ID_Comision_Empleado, ID_Comision, IDPago, Porcentaje_Comision, Fecha_Comision)
+    VALUES (NULL, @ComisionID, NULL, @ComisionEmpleado, GETDATE())
+END;
+
+--- TRIGGER 3 : 
+CREATE TRIGGER EvaluarRetrasoEntrada
+ON RegistroEntradaEmpleado -- Reemplaza "RegistroEntradaEmpleado" con el nombre de la tabla que registra las entradas de los empleados
+AFTER INSERT
+AS
+BEGIN
+    -- Variables para almacenar el retraso
+    DECLARE @EmpleadoID INT, @HoraEntrada TIME, @DiaSemana VARCHAR(20), @RetrasoMinutos INT;
+
+    -- Obtener los datos de entrada del empleado
+    SELECT @EmpleadoID = ID_Empleado, @HoraEntrada = HoraEntrada
+    FROM inserted;
+
+    -- Obtener el día de la semana correspondiente a la fecha de entrada
+    SET @DiaSemana = DATENAME(WEEKDAY, GETDATE()); -- Puedes ajustar esto según tu implementación para obtener el día de la semana correcto
+
+    -- Obtener el horario del empleado para el día de la semana correspondiente
+    DECLARE @HoraInicio TIME, @HoraFin TIME;
+    SELECT @HoraInicio = HoraInicio, @HoraFin = HoraFin
+    FROM HorarioEmpleado
+    WHERE ID_Empleado = @EmpleadoID AND DiaSemana = @DiaSemana;
+
+    -- Calcular el retraso en minutos
+    SET @RetrasoMinutos = DATEDIFF(MINUTE, @HoraInicio, @HoraEntrada);
+
+    -- Verificar si hay retraso mayor o igual a 10 minutos
+    IF @RetrasoMinutos >= 10
+    BEGIN
+        -- Guardar los datos de retraso en la tabla "RegistroRetrasoEntrada"
+        INSERT INTO RegistroRetrasoEntrada (ID_Empleado, DiaSemana, HoraEntrada, RetrasoMinutos)
+        VALUES (@EmpleadoID, @DiaSemana, @HoraEntrada, @RetrasoMinutos);
+    END
+END;
