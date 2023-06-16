@@ -48,7 +48,7 @@ END;
 
 --- TRIGGER 3 : 
 CREATE TRIGGER EvaluarRetrasoEntrada
-ON RegistroEntradaEmpleado -- Reemplaza "RegistroEntradaEmpleado" con el nombre de la tabla que registra las entradas de los empleados
+ON RegistroEntradaEmpleado
 AFTER INSERT
 AS
 BEGIN
@@ -60,7 +60,9 @@ BEGIN
     FROM inserted;
 
     -- Obtener el día de la semana correspondiente a la fecha de entrada
-    SET @DiaSemana = DATENAME(WEEKDAY, GETDATE()); -- Puedes ajustar esto según tu implementación para obtener el día de la semana correcto
+	SET LANGUAGE SPANISH;
+    SELECT @DiaSemana = DATENAME(WEEKDAY, FECHA)
+	FROM inserted
 
     -- Obtener el horario del empleado para el día de la semana correspondiente
     DECLARE @HoraInicio TIME, @HoraFin TIME;
@@ -68,14 +70,44 @@ BEGIN
     FROM HorarioEmpleado
     WHERE ID_Empleado = @EmpleadoID AND DiaSemana = @DiaSemana;
 
-    -- Calcular el retraso en minutos
-    SET @RetrasoMinutos = DATEDIFF(MINUTE, @HoraInicio, @HoraEntrada);
-
-    -- Verificar si hay retraso mayor o igual a 10 minutos
-    IF @RetrasoMinutos >= 10
+    -- Verificar si el registro de entrada coincide con el horario de trabajo del empleado
+    IF @HoraEntrada >= @HoraInicio AND @HoraEntrada <= @HoraFin
     BEGIN
-        -- Guardar los datos de retraso en la tabla "RegistroRetrasoEntrada"
-        INSERT INTO RegistroRetrasoEntrada (ID_Empleado, DiaSemana, HoraEntrada, RetrasoMinutos)
-        VALUES (@EmpleadoID, @DiaSemana, @HoraEntrada, @RetrasoMinutos);
+        -- Calcular el retraso en minutos
+        SET @RetrasoMinutos = DATEDIFF(MINUTE, @HoraInicio, @HoraEntrada);
+
+        -- Verificar si hay retraso mayor o igual a 10 minutos
+        IF @RetrasoMinutos >= 10
+        BEGIN
+            -- Guardar los datos de retraso en la tabla "RegistroRetrasoEntrada"
+            INSERT INTO RegistroRetrasoEntrada (ID_Empleado, DiaSemana, HoraEntrada, RetrasoMinutos)
+            VALUES (@EmpleadoID, @DiaSemana, @HoraEntrada, @RetrasoMinutos);
+        END
+    END
+    ELSE
+    BEGIN
+        -- El registro de entrada no coincide con ningún horario, eliminarlo
+        DELETE FROM RegistroEntradaEmpleado
+        WHERE ID_Empleado = @EmpleadoID;
     END
 END;
+GO
+
+/*PRUEBA DE TRIGGER 3*/
+-- COMPORTAMIENTO , SE INSERTA UNA FILA QUE REGISTRA LA ENTRADA DE UN EMPLEADO
+-- ESTOS DATOS SON COMPROBADOS EN LA TABLA HORARIO DEL EMPLEADOS 
+--- CONSIDERANDO LOS EMPLEADOS QUE ESTAN REGISTRADOS
+-- Y LUEGO COMPROBANDO EL HORARIO DE ENTRADA Y LLEGADA 
+-- SI NO CUMPLE NINGUNA CONDICION ACEPTABLE , EL REGISTRO QUE FUE INGRESADO
+--- SE BORRARA
+Declare @ultimoID INT
+set @ultimoID = (select top 1 ID_RegistroEntrada from RegistroEntradaEmpleado order by ID_RegistroEntrada desc);
+/* crea una fila con dia Lunes ,
+horario desfasado 
+y el empleado que esta registrado para trabajar
+justamente para el dia Lunes que tiene id 1 
+formato de la fecha es año-mes-dia
+*/
+SET IDENTITY_INSERT RegistroEntradaEmpleado ON
+insert into RegistroEntradaEmpleado (ID_RegistroEntrada, ID_Empleado,Fecha, HoraEntrada) VALUES ((@ultimoID + 1) , 1 , '2023-06-05' , '09:10:00.0000000');
+GO
